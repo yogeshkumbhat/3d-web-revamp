@@ -196,13 +196,16 @@ you conversions" is more useful than a compliant build.
 
 ## Scripts
 
+- `scripts/fetch_fixture.py` — downloads a CC0 test model so the pipeline can be run
+  end to end when the user has not supplied one yet
 - `scripts/audit_site.py <url>` — content, meta, palette and font inventory of a live site
 - `scripts/optimize_assets.sh <input.glb>` — compression pipeline with budget reporting
 - `scripts/check_budget.js <url>` — measures performance and fallback paths, exits non-zero on failure
 - `scripts/capture_poster.js <url>` — renders the poster from the live scene in AVIF/WebP/JPEG
 
 The Node scripts need `npm i puppeteer` (and `sharp` for poster encoding). The Python
-script needs `pip install requests beautifulsoup4`.
+scripts need `pip install requests beautifulsoup4`. `optimize_assets.sh` uses
+`@gltf-transform/cli`, falling back to `npx` when it is not installed globally.
 
 ## A worked example
 

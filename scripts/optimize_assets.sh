@@ -16,7 +16,7 @@
 #   configurator  2.5 MB
 #   narrative     4.0 MB
 #
-# Requires: npm i -g @gltf-transform/cli
+# Requires: @gltf-transform/cli (global install, or npx will fetch it)
 
 set -euo pipefail
 
@@ -45,11 +45,18 @@ done
 [[ -z "$INPUT" ]] && usage
 [[ -f "$INPUT" ]] || { echo "No such file: $INPUT" >&2; exit 1; }
 
-command -v gltf-transform >/dev/null 2>&1 || {
-  echo "gltf-transform not found. Install with:" >&2
+# Prefer a global install; fall back to npx so the pipeline runs on a clean machine
+# (and in CI) without a global npm install, which often fails on permissions.
+if command -v gltf-transform >/dev/null 2>&1; then
+  GLTF() { gltf-transform "$@"; }
+elif command -v npx >/dev/null 2>&1; then
+  echo "gltf-transform not installed globally — using npx (first run downloads it)." >&2
+  GLTF() { npx --yes --package @gltf-transform/cli gltf-transform "$@"; }
+else
+  echo "gltf-transform not found, and no npx to fall back on. Install with:" >&2
   echo "  npm i -g @gltf-transform/cli" >&2
   exit 1
-}
+fi
 
 case "$CATEGORY" in
   hero)         BUDGET_BYTES=1572864  ; BUDGET_LABEL="1.5 MB" ; TRI_BUDGET=150000 ;;
@@ -67,7 +74,42 @@ trap 'rm -rf "$TMP"' EXIT
 human() { awk -v b="$1" 'BEGIN{ split("B KB MB GB",u," "); i=1; while(b>=1024&&i<4){b/=1024;i++} printf "%.2f %s", b, u[i] }'; }
 gz_size() { gzip -c "$1" | wc -c | tr -d ' '; }
 
-SIZE_BEFORE=$(wc -c < "$INPUT" | tr -d ' ')
+# A .gltf is a JSON manifest pointing at a .bin and loose texture files, so its own
+# size says nothing about what the user actually ships. Sum the manifest plus every
+# buffer and image it references, or the "before" figure is meaningless and the saving
+# percentage comes out negative.
+asset_size() {
+  local input="$1"
+  local total
+  total=$(wc -c < "$input" | tr -d ' ')
+  case "$input" in
+    *.gltf)
+      local dir refs ref
+      dir="$(cd "$(dirname "$input")" && pwd)"
+      refs=$(python3 - "$input" <<'PY' 2>/dev/null || true
+import json, sys, urllib.parse
+try:
+    doc = json.load(open(sys.argv[1]))
+except Exception:
+    sys.exit(0)
+for key in ("buffers", "images"):
+    for item in doc.get(key) or []:
+        uri = item.get("uri")
+        # Skip data: URIs — already counted inside the manifest itself.
+        if uri and not uri.startswith("data:"):
+            print(urllib.parse.unquote(uri))
+PY
+)
+      while IFS= read -r ref; do
+        [ -n "$ref" ] || continue
+        [ -f "$dir/$ref" ] && total=$(( total + $(wc -c < "$dir/$ref" | tr -d ' ') ))
+      done <<< "$refs"
+      ;;
+  esac
+  echo "$total"
+}
+
+SIZE_BEFORE=$(asset_size "$INPUT")
 
 echo "──────────────────────────────────────────────"
 echo " Optimising: $INPUT"
@@ -80,55 +122,63 @@ step() { echo "  • $1"; }
 
 # 1. Prune — drop unused nodes, materials, textures, animations
 step "prune"
-gltf-transform prune "$INPUT" "$TMP/1.glb" >/dev/null 2>&1
+GLTF prune "$INPUT" "$TMP/1.glb" >/dev/null 2>&1
 
 # 2. Dedup — merge duplicate accessors and materials
 step "dedup"
-gltf-transform dedup "$TMP/1.glb" "$TMP/2.glb" >/dev/null 2>&1
+GLTF dedup "$TMP/1.glb" "$TMP/2.glb" >/dev/null 2>&1
 
 # 3. Weld — merge coincident vertices (big win on CAD exports)
 step "weld"
-gltf-transform weld "$TMP/2.glb" "$TMP/3.glb" >/dev/null 2>&1
+GLTF weld "$TMP/2.glb" "$TMP/3.glb" >/dev/null 2>&1
 
 # 4. Optional simplification — check normals afterwards, this can wreck curved shading
 if [[ -n "$SIMPLIFY" ]]; then
   step "simplify (error $SIMPLIFY)"
-  gltf-transform simplify "$TMP/3.glb" "$TMP/4.glb" --error "$SIMPLIFY" >/dev/null 2>&1
+  GLTF simplify "$TMP/3.glb" "$TMP/4.glb" --error "$SIMPLIFY" >/dev/null 2>&1
 else
   cp "$TMP/3.glb" "$TMP/4.glb"
 fi
 
 # 5. Resize textures — usually the single biggest saving
 step "resize textures → ${TEXTURE_SIZE}px"
-gltf-transform resize "$TMP/4.glb" "$TMP/5.glb" \
+GLTF resize "$TMP/4.glb" "$TMP/5.glb" \
   --width "$TEXTURE_SIZE" --height "$TEXTURE_SIZE" >/dev/null 2>&1
 
 # 6. KTX2 texture compression — stays compressed in VRAM
 step "KTX2 texture compression (uastc)"
-if ! gltf-transform uastc "$TMP/5.glb" "$TMP/6.glb" --level 4 --rdo 4 >/dev/null 2>&1; then
+if ! GLTF uastc "$TMP/5.glb" "$TMP/6.glb" --level 4 --rdo 4 >/dev/null 2>&1; then
   echo "    (uastc failed — falling back to etc1s)"
-  gltf-transform etc1s "$TMP/5.glb" "$TMP/6.glb" --quality 200 >/dev/null 2>&1 \
+  GLTF etc1s "$TMP/5.glb" "$TMP/6.glb" --quality 200 >/dev/null 2>&1 \
     || cp "$TMP/5.glb" "$TMP/6.glb"
 fi
 
 # 7. Geometry compression
 step "$COMPRESSION geometry compression"
 if [[ "$COMPRESSION" == "draco" ]]; then
-  gltf-transform draco "$TMP/6.glb" "$OUTPUT" >/dev/null 2>&1
+  GLTF draco "$TMP/6.glb" "$OUTPUT" >/dev/null 2>&1
 else
-  gltf-transform meshopt "$TMP/6.glb" "$OUTPUT" --level high >/dev/null 2>&1
+  GLTF meshopt "$TMP/6.glb" "$OUTPUT" --level high >/dev/null 2>&1
 fi
 
 SIZE_AFTER=$(wc -c < "$OUTPUT" | tr -d ' ')
 GZ_AFTER=$(gz_size "$OUTPUT")
-SAVED=$(( 100 - (SIZE_AFTER * 100 / SIZE_BEFORE) ))
+if [[ "$SIZE_BEFORE" -gt 0 ]]; then
+  SAVED=$(( 100 - (SIZE_AFTER * 100 / SIZE_BEFORE) ))
+else
+  SAVED=0
+fi
 
 echo ""
 echo "──────────────────────────────────────────────"
 echo " Result"
 echo "──────────────────────────────────────────────"
 printf "  Before          %s\n" "$(human "$SIZE_BEFORE")"
-printf "  After           %s  (-%s%%)\n" "$(human "$SIZE_AFTER")" "$SAVED"
+if [[ "$SAVED" -ge 0 ]]; then
+  printf "  After           %s  (-%s%%)\n" "$(human "$SIZE_AFTER")" "$SAVED"
+else
+  printf "  After           %s  (+%s%% — grew; see note below)\n" "$(human "$SIZE_AFTER")" "$(( -SAVED ))"
+fi
 printf "  Gzipped         %s\n" "$(human "$GZ_AFTER")"
 printf "  Budget          %s\n" "$BUDGET_LABEL"
 
@@ -150,7 +200,7 @@ echo ""
 echo "──────────────────────────────────────────────"
 echo " Inspection"
 echo "──────────────────────────────────────────────"
-gltf-transform inspect "$OUTPUT" 2>/dev/null | head -50 || true
+GLTF inspect "$OUTPUT" 2>/dev/null | head -50 || true
 
 echo ""
 echo "  Triangle budget for $CATEGORY: $TRI_BUDGET"

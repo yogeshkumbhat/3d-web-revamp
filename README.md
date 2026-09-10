@@ -42,6 +42,36 @@ assets/starter/           runnable Three.js + R3F starter
 scripts/                  audit_site.py, capture_poster.js
 ```
 
+## Try the pipeline
+
+The repo ships no binary assets — a skill about payload discipline shouldn't put
+megabytes into every clone. Instead it fetches one CC0 model on demand:
+
+```bash
+./scripts/fetch_fixture.py                       # WoodenChair_01 @ 1k, ~1 MB, CC0
+./scripts/optimize_assets.sh fixtures/WoodenChair_01/WoodenChair_01_1k.gltf \
+    --category configurator --texture-size 1024
+```
+
+Measured output, not an aspiration:
+
+```
+ Optimising: fixtures/WoodenChair_01/WoodenChair_01_1k.gltf
+ Category:   configurator (budget 2.5 MB gzipped)
+ Geometry:   meshopt
+ Textures:   KTX2, max 1024px
+
+  Before          1.03 MB
+  After           721.31 KB  (-32%)
+  Gzipped         682.23 KB
+  Budget          2.5 MB
+  Status          PASS
+```
+
+The fixture is from [Poly Haven](https://polyhaven.com/license) and is CC0 / public
+domain — free to redistribute, modify and use commercially, no attribution required.
+It is downloaded, never committed, so this repository stays MIT-clean.
+
 ## Case studies
 
 The teardowns measure publicly accessible sites and analyse their structural and
