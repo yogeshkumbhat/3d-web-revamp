@@ -61,6 +61,12 @@ cannot do; type, layout and photographic backdrops are usually better, cheaper a
 accessible as DOM and video. `references/case-studies/pear-no.md` is a measured example
 of a site that reads as premium on nine draw calls.
 
+If the answer is video or imagery rather than a scene, read `references/media-sources.md`
+before sourcing anything. It covers which libraries are safe to use on a commercial client
+site and which need the licence read per clip, the four clauses that decide it, and how to
+turn the art direction into a search that returns the right footage instead of the
+prettiest. Then `scripts/optimize_video.sh` produces the shippable ladder.
+
 Then settle:
 
 - the emotion and archetype (precision? warmth? weight? weightlessness?)
@@ -183,6 +189,7 @@ you conversions" is more useful than a compliant build.
 - `references/performance.md` — full budgets, device tiering, measurement
 - `references/accessibility-seo.md` — fallbacks, reduced motion, crawlers, keyboard
 - `references/ship-checklist.md` — the gate before you call it done
+- `references/media-sources.md` — licence-safe media sourcing, search vocabulary, self-hosting
 - `references/anti-patterns.md` — the recurring failure modes, scan this early
 - `references/case-studies/` — measured teardowns of real sites: what the technique
   actually was, and what it cost. Read the relevant one when a client points at a
@@ -202,6 +209,8 @@ you conversions" is more useful than a compliant build.
 - `scripts/optimize_assets.sh <input.glb>` — compression pipeline with budget reporting
 - `scripts/check_budget.js <url>` — measures performance and fallback paths, exits non-zero on failure
 - `scripts/capture_poster.js <url>` — renders the poster from the live scene in AVIF/WebP/JPEG
+- `scripts/optimize_video.sh <clip>` — video hero encode ladder: h264 + vp9 + poster +
+  reduced-motion still, budget-checked, exits non-zero on failure
 
 The Node scripts need `npm i puppeteer` (and `sharp` for poster encoding). The Python
 scripts need `pip install requests beautifulsoup4`. `optimize_assets.sh` uses

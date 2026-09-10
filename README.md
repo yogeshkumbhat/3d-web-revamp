@@ -35,11 +35,12 @@ references/               deep dives loaded on demand
   configurator.md         product configurators
   performance.md          budgets and device tiering
   accessibility-seo.md    the fallback layer
+  media-sources.md        licence-safe stock, search vocabulary
   anti-patterns.md        what goes wrong
   ship-checklist.md       pre-launch gate
   case-studies/           measured teardowns of public sites
 assets/starter/           runnable Three.js + R3F starter
-scripts/                  audit_site.py, capture_poster.js
+scripts/                  audit_site.py, optimize_video.sh, check_budget.js, …
 ```
 
 ## Try the pipeline
