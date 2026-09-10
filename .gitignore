@@ -10,3 +10,5 @@ __pycache__/
 .env.*
 fixtures/
 optimized/
+node_modules/
+package-lock.json

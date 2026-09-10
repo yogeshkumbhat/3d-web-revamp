@@ -211,6 +211,8 @@ you conversions" is more useful than a compliant build.
 - `scripts/capture_poster.js <url>` — renders the poster from the live scene in AVIF/WebP/JPEG
 - `scripts/optimize_video.sh <clip>` — video hero encode ladder: h264 + vp9 + poster +
   reduced-motion still, budget-checked, exits non-zero on failure
+- `scripts/verify_starter.mjs` — drives the starter headlessly through visible,
+  reduced-motion and background-tab states; exits non-zero on failure
 
 The Node scripts need `npm i puppeteer` (and `sharp` for poster encoding). The Python
 scripts need `pip install requests beautifulsoup4`. `optimize_assets.sh` uses

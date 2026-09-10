@@ -4,8 +4,17 @@ A working reference implementation of the patterns this skill requires. Not a te
 to ship as-is — the geometry is a placeholder. The scaffolding around it is the point,
 because that scaffolding is what people skip and what makes 3D sites fail in production.
 
-Verified rendering in headless Chrome: scene mounts, first frame draws, poster
-crossfades out, and all three fallback paths (no-JS, reduced-motion, no-WebGL) hold.
+Verified rendering in headless Chrome. Re-run the check yourself — it exits non-zero
+on failure, so the claim cannot rot silently:
+
+```bash
+cd assets/starter && python3 -m http.server 8000 &
+node ../../scripts/verify_starter.mjs
+```
+
+It asserts that a visible tab mounts the scene, that `prefers-reduced-motion` takes the
+static path and never mounts, and that a page loaded in a *background* tab stays dark
+while hidden and mounts once the visitor switches to it.
 
 ## Run it
 
