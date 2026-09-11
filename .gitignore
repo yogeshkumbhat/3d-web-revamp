@@ -12,3 +12,4 @@ fixtures/
 optimized/
 node_modules/
 package-lock.json
+.posters-cache/

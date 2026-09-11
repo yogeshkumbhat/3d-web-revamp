@@ -9,18 +9,21 @@ It covers auditing and preserving the current site's content, choosing the right
 direction, the glTF/Draco/KTX2 asset pipeline, hard performance budgets, device tiering,
 and a non-negotiable fallback layer for crawlers, no-WebGL and reduced-motion users.
 
-## Live demo
+## Live
 
-**https://yogeshkumbhat.github.io/3d-web-revamp/** — the starter running, deployed from
-`assets/starter/` on every push. Scroll it, then try it with reduced motion on and with
-JavaScript off: the page is complete in all three states, which is the whole argument.
+**https://yogeshkumbhat.github.io/3d-web-revamp/** — the skill's homepage, built with the
+skill. A scroll-driven 3D narrative through the seven phases that weighs about 270 KB on
+first visit, measures itself live in the corner, and lets you switch it to the poster,
+still and raw-HTML paths to see that nothing breaks. Source in [`site/`](site/).
 
-Add `?tier=high|medium|low` to force a quality tier.
+**https://yogeshkumbhat.github.io/3d-web-revamp/starter/** — the bare starter from
+`assets/starter/`. Add `?tier=high|medium|low` to either to force a quality tier.
 
-The deploy is gated on `scripts/verify_starter.mjs`, which drives the page headlessly and
-asserts the scene mounts in a visible tab, that reduced motion takes the static path, that
-a page opened in a background tab mounts when the visitor switches to it, and that no image
-404s. A regression fails the build instead of shipping.
+Every push is gated: `scripts/verify_starter.mjs` checks the starter, then the site is
+built (its posters rendered from the scene by `capture_poster.js`) and `site/verify.mjs`
+drives it through the scene, reduced-motion, no-WebGL, no-JS, background-tab, switcher
+and phone paths and holds the first visit to the 1.5 MB budget. A regression fails the
+build instead of shipping.
 
 ## Install
 
@@ -54,6 +57,7 @@ references/               deep dives loaded on demand
   case-studies/           measured teardowns of public sites
 assets/starter/           runnable Three.js + R3F starter
 scripts/                  audit_site.py, optimize_video.sh, check_budget.js, …
+site/                     the homepage, built with the skill (not needed to use it)
 ```
 
 ## Try the pipeline

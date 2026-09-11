@@ -1,4 +1,4 @@
-name: Verify and publish the starter
+name: Verify and publish the site
 
 on:
   push:
@@ -15,8 +15,8 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  verify:
-    name: Verify the starter still holds
+  build:
+    name: Build and verify
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -24,36 +24,43 @@ jobs:
         with:
           node-version: 22
 
-      - name: Install puppeteer
-        run: npm i --no-save puppeteer
+      - name: Install build and test tools
+        run: npm i --no-save puppeteer sharp three@0.169.0 esbuild@0.24.0
 
-      - name: Serve the starter
+      # Asserts the starter mounts in a visible tab, that reduced motion takes the static
+      # path, that a background tab mounts on reveal, and that no image 404s.
+      - name: Verify the starter still holds
         run: |
-          cd assets/starter
-          python3 -m http.server 8000 &
+          (cd assets/starter && python3 -m http.server 8000 &)
           for _ in $(seq 1 30); do
             curl -sf -o /dev/null http://localhost:8000/ && break
             sleep 1
           done
+          node scripts/verify_starter.mjs
 
-      # Asserts the scene mounts in a visible tab, that reduced-motion takes the
-      # static path, that a background tab mounts on reveal, and that no image 404s.
-      # Exits non-zero, so a regression fails the build instead of shipping.
-      - name: Verify
-        run: node scripts/verify_starter.mjs
+      # Bundles the page, copies the starter to /starter/, and renders every still from
+      # the built scene with scripts/capture_poster.js — so no poster can drift from it.
+      - name: Build the site
+        run: node site/build.mjs --posters
+
+      # Drives the built site through every path a visitor can get — scene, reduced
+      # motion, no WebGL, no JavaScript, a background tab, the fallback switcher, a
+      # phone — and holds the first visit to the 1.5 MB budget. Exits non-zero.
+      - name: Verify the site
+        run: node site/verify.mjs
+
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site/dist
 
   deploy:
     name: Publish to Pages
-    needs: verify
+    needs: build
     runs-on: ubuntu-latest
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/configure-pages@v5
-      - uses: actions/upload-pages-artifact@v3
-        with:
-          path: assets/starter
       - id: deployment
         uses: actions/deploy-pages@v4
