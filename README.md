@@ -9,6 +9,19 @@ It covers auditing and preserving the current site's content, choosing the right
 direction, the glTF/Draco/KTX2 asset pipeline, hard performance budgets, device tiering,
 and a non-negotiable fallback layer for crawlers, no-WebGL and reduced-motion users.
 
+## Live demo
+
+**https://yogeshkumbhat.github.io/3d-web-revamp/** — the starter running, deployed from
+`assets/starter/` on every push. Scroll it, then try it with reduced motion on and with
+JavaScript off: the page is complete in all three states, which is the whole argument.
+
+Add `?tier=high|medium|low` to force a quality tier.
+
+The deploy is gated on `scripts/verify_starter.mjs`, which drives the page headlessly and
+asserts the scene mounts in a visible tab, that reduced motion takes the static path, that
+a page opened in a background tab mounts when the visitor switches to it, and that no image
+404s. A regression fails the build instead of shipping.
+
 ## Install
 
 Claude Code / Cowork:
