@@ -80,7 +80,9 @@ async function open({ query = '?tier=high', reducedMotion = false, noWebGL = fal
   return { page, failed, errors };
 }
 
-const until = async (page, fn, ms = 15000) => {
+// Generous deadlines: a CI runner with software GL is several times slower than a
+// laptop. until() returns as soon as the condition holds, so they cost nothing locally.
+const until = async (page, fn, ms = 45000) => {
   const t = Date.now();
   while (Date.now() - t < ms) {
     if (await page.evaluate(fn).catch(() => false)) return true;
@@ -117,7 +119,7 @@ try {
       for (let y = 0; y < h; y += innerHeight / 2) { scrollTo(0, y); await new Promise((r) => setTimeout(r, 120)); }
     });
     // The camera is damped, so give it time to glide the rest of the way.
-    const reached = await until(page, () => window.__site.stats()?.station === 'install', 10000);
+    const reached = await until(page, () => window.__site.stats()?.station === 'install', 30000);
     const bottom = await page.evaluate(() => window.__site.stats()?.station);
     check('camera reaches the last station', reached, bottom);
     check('no JavaScript errors while scrolling', errors.length === 0, errors[0]);
@@ -141,7 +143,7 @@ try {
     const still = await until(page, () => {
       const on = document.querySelector('.still.on img');
       return on && on.complete && on.naturalWidth > 0 && /fallback/.test(on.currentSrc);
-    }, 6000);
+    }, 20000);
     check('static path swaps to the section\'s still', still);
     check('no failed requests (reduced motion)', failed.length === 0, failed[0]);
     await page.close();
@@ -188,7 +190,7 @@ try {
     await wait(2500);
     const before = await page.evaluate(() => window.__site.path === 'scene');
     await page.evaluate(() => { window.__hidden = false; document.dispatchEvent(new Event('visibilitychange')); });
-    const after = await until(page, () => window.__site.path === 'scene', 12000);
+    const after = await until(page, () => window.__site.path === 'scene', 45000);
     check('background tab stays dark while hidden', !before);
     check('background tab mounts on reveal', after);
     await page.close();
@@ -204,14 +206,14 @@ try {
     const poster = await page.evaluate(() => ({ path: window.__site.path, canvas: !!document.querySelector('#scene canvas') }));
     check('switcher: poster tears the scene down', poster.path === 'static' && !poster.canvas);
     await page.click('.switch [data-mode="scene"]');
-    const back = await until(page, () => window.__site.path === 'scene', 12000);
+    const back = await until(page, () => window.__site.path === 'scene', 45000);
     check('switcher: scene comes back', back);
     await page.click('.switch [data-mode="raw"]');
     await wait(400);
     const raw = await page.evaluate(() => [...document.styleSheets].every((s) => s.disabled));
     check('switcher: raw HTML disables every stylesheet', raw);
     await page.evaluate(() => [...document.querySelectorAll('button')].find((b) => /Restore the design/.test(b.textContent)).click());
-    const restored = await until(page, () => [...document.styleSheets].every((s) => !s.disabled) && window.__site.path === 'scene', 12000);
+    const restored = await until(page, () => [...document.styleSheets].every((s) => !s.disabled) && window.__site.path === 'scene', 45000);
     check('switcher: restore brings the design and scene back', restored);
     await page.click('.motion');
     await wait(600);

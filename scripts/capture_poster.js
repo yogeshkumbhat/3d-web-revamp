@@ -86,8 +86,21 @@ try {
   cdp.on('Page.screencastFrame', ({ sessionId }) =>
     cdp.send('Page.screencastFrameAck', { sessionId }).catch(() => {}));
 
-  console.log(`Waiting ${wait}ms for the scene to settle...`);
+  // Wait for a frame that has actually been drawn and faded fully in, not for a fixed
+  // delay: a slow CI runner with software GL can take several times longer than a
+  // laptop, and a guessed delay turns that into a black poster. --wait is the minimum.
+  console.log(`Waiting at least ${wait}ms for the scene to render and settle...`);
+  const rendered = () => page.evaluate((sel) => {
+    const c = document.querySelector(sel)?.querySelector('canvas');
+    if (!c || c.width === 0) return false;
+    const cs = getComputedStyle(c);
+    return cs.display !== 'none' && parseFloat(cs.opacity) >= 0.99;
+  }, selector).catch(() => false);
   await new Promise((r) => setTimeout(r, wait));
+  const deadline = Date.now() + 60000;
+  while (!(await rendered()) && Date.now() < deadline) {
+    await new Promise((r) => setTimeout(r, 500));
+  }
 
   // Hide DOM content so the poster is the scene alone — the HTML layer renders on top
   // of it at runtime and would otherwise be baked in twice.
@@ -109,12 +122,7 @@ try {
 
   // A scene that never mounted still screenshots fine — as a black rectangle, which
   // would then ship as the poster. Refuse instead of writing it.
-  const rendered = await page.evaluate((sel) => {
-    const c = document.querySelector(sel)?.querySelector('canvas');
-    return !!c && c.width > 0 && parseFloat(getComputedStyle(c).opacity) > 0.5
-      && getComputedStyle(c).display !== 'none';
-  }, selector);
-  if (!rendered) {
+  if (!(await rendered())) {
     console.error(`No rendered canvas inside ${selector} — the scene never mounted, so the poster would be blank.`);
     await browser.close();
     process.exit(1);
