@@ -1,0 +1,59 @@
+name: Verify and publish the starter
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: Verify the starter still holds
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install puppeteer
+        run: npm i --no-save puppeteer
+
+      - name: Serve the starter
+        run: |
+          cd assets/starter
+          python3 -m http.server 8000 &
+          for _ in $(seq 1 30); do
+            curl -sf -o /dev/null http://localhost:8000/ && break
+            sleep 1
+          done
+
+      # Asserts the scene mounts in a visible tab, that reduced-motion takes the
+      # static path, that a background tab mounts on reveal, and that no image 404s.
+      # Exits non-zero, so a regression fails the build instead of shipping.
+      - name: Verify
+        run: node scripts/verify_starter.mjs
+
+  deploy:
+    name: Publish to Pages
+    needs: verify
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: assets/starter
+      - id: deployment
+        uses: actions/deploy-pages@v4
