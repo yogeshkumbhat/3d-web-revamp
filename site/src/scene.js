@@ -37,15 +37,23 @@ const mark = (name) => performance.mark?.(`scene:${name}`);
 
 export async function init(container, tier, { pose = null } = {}) {
   mark('init');
+  // Keep evaluating this chunk and creating the WebGL context in separate tasks.
+  await yieldToMain();
   const canvas = container.querySelector('canvas');
   const reveal = createPosterReveal(container, { duration: 900 });
 
-  const renderer = new THREE.WebGLRenderer({
-    canvas,
-    antialias: tier.antialias,
-    alpha: false,
-    powerPreference: 'high-performance',
-  });
+  // Create the context in its own task, then hand it to Three. Together, context
+  // creation and the renderer's capability queries sat right on the 50ms line on a
+  // throttled phone. Attributes match what WebGLRenderer would have asked for.
+  const attributes = {
+    alpha: false, depth: true, stencil: false, antialias: tier.antialias,
+    premultipliedAlpha: true, preserveDrawingBuffer: false,
+    powerPreference: 'high-performance', failIfMajorPerformanceCaveat: false,
+  };
+  const context = canvas.getContext('webgl2', attributes);
+  await yieldToMain();
+
+  const renderer = new THREE.WebGLRenderer({ canvas, context, ...attributes });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, tier.dpr));
   renderer.setSize(container.clientWidth, container.clientHeight, false);
   renderer.setClearColor(0x07080a, 1);
@@ -360,6 +368,9 @@ export async function init(container, tier, { pose = null } = {}) {
     const check = () => (firstFrameDone ? resolve() : requestAnimationFrame(check));
     check();
   });
+  // Resolve in a fresh task, so the caller's work on "scene ready" doesn't run as a
+  // microtask chained onto the first frame's render.
+  await yieldToMain();
 
   return {
     pause: stop,

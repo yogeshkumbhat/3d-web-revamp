@@ -402,7 +402,18 @@ matchMedia('(prefers-reduced-motion: reduce)').addEventListener?.('change', () =
 // Go
 // ---------------------------------------------------------------------------
 
-measurePhases();
-stills.measure();
-onScroll();
-setWant(site.want);
+// Startup runs as a few short tasks rather than one long one. Measuring forces a layout
+// of the whole page, and the mount gate's WebGL probe creates a context — together they
+// were a 60ms task on a throttled phone, landing just after first paint.
+const yieldToMain = () => new Promise((resolve) => {
+  if (globalThis.scheduler?.yield) globalThis.scheduler.yield().then(resolve);
+  else setTimeout(resolve, 0);
+});
+(async () => {
+  await yieldToMain();
+  measurePhases();
+  stills.measure();
+  onScroll();
+  await yieldToMain();
+  setWant(site.want);
+})();
