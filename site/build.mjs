@@ -58,7 +58,6 @@ fs.cpSync(path.join(repo, 'assets/starter'), path.join(dist, 'starter'), {
   recursive: true,
   filter: (src) => !src.endsWith('.DS_Store'),
 });
-fs.writeFileSync(path.join(dist, '.nojekyll'), '');
 
 console.log('\nBundle');
 for (const [file, info] of Object.entries(result.metafile.outputs)) {
