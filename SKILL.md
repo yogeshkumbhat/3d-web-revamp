@@ -150,8 +150,9 @@ node scripts/check_budget.js http://localhost:5173 --mobile --duration 30
 It reports LCP and which element is the LCP, CLS, transfer size, frame-time p95, draw
 calls and triangles per frame (counted by instrumenting the GL context, so it works
 regardless of framework), sustained drift for thermal throttling and leaks, and the
-no-JS, reduced-motion and no-WebGL fallback paths. It exits non-zero on failure, so it
-can gate a deploy.
+no-JS, reduced-motion and no-WebGL fallback paths — and, for every long task, the script
+that ran in it, so a failure says what to fix. It exits non-zero on failure, so it can
+gate a deploy.
 
 Where it cannot measure something reliably it says "not measurable" rather than
 inventing a verdict — headless browsers throttle rendering, so frame timing from CI

@@ -63,7 +63,7 @@ const MOBILE = {
 // ---------------------------------------------------------------------------
 const INSTRUMENT = `
 (() => {
-  const stats = { frames: [], calls: [], tris: [], longTasks: [] };
+  const stats = { frames: [], calls: [], tris: [], longTasks: [], frames50: [] };
   window.__budget = stats;
 
   let frameCalls = 0, frameTris = 0;
@@ -107,6 +107,26 @@ const INSTRUMENT = `
     new PerformanceObserver((list) => {
       for (const e of list.getEntries()) stats.longTasks.push({ start: e.startTime, duration: e.duration });
     }).observe({ type: 'longtask', buffered: true });
+  } catch {}
+
+  // Long animation frames carry script attribution — which file and function ran —
+  // so a failing long-task check can say what to fix instead of just how long it was.
+  try {
+    new PerformanceObserver((list) => {
+      for (const e of list.getEntries()) {
+        if (e.duration < 50) continue;
+        stats.frames50.push({
+          start: e.startTime,
+          duration: e.duration,
+          layout: e.styleAndLayoutStart ? e.startTime + e.duration - e.styleAndLayoutStart : 0,
+          scripts: (e.scripts || []).map((x) => ({
+            where: (x.sourceURL || '').split('/').pop() + (x.sourceFunctionName ? ':' + x.sourceFunctionName : ''),
+            invoker: x.invoker,
+            duration: x.duration,
+          })),
+        });
+      }
+    }).observe({ type: 'long-animation-frame', buffered: true });
   } catch {}
 
   try {
@@ -205,6 +225,7 @@ async function measureMain(browser, url, opts) {
       // fail every page on the cost of existing at all.
       fcp: performance.getEntriesByName('first-contentful-paint')[0]?.startTime ?? 0,
       longTasks: s.longTasks,
+      frames50: s.frames50,
       lcp: s.lcp ?? null,
       lcpElement: s.lcpElement ?? null,
       cls: s.cls ?? 0,
@@ -242,6 +263,16 @@ async function measureMain(browser, url, opts) {
     longTasks: stats.longTasks
       .filter((t) => t.start >= stats.fcp && t.duration > COMMON.longTaskMs)
       .map((t) => Math.round(t.duration)),
+    // For each long task, the long animation frame it fell in and what ran there.
+    longTaskCauses: stats.longTasks
+      .filter((t) => t.start >= stats.fcp && t.duration > COMMON.longTaskMs)
+      .map((t) => {
+        const f = stats.frames50.find((a) => t.start >= a.start - 1 && t.start <= a.start + a.duration);
+        if (!f) return `${Math.round(t.duration)} ms at ${Math.round(t.start)} ms — no script attribution (browser work: GC, decode, GPU)`;
+        const top = [...f.scripts].sort((a, b) => b.duration - a.duration).slice(0, 2)
+          .map((x) => `${x.where || x.invoker} ${Math.round(x.duration)} ms`).join(', ');
+        return `${Math.round(t.duration)} ms at ${Math.round(t.start)} ms — ${top || 'no script'}${f.layout > 10 ? `, style+layout ${Math.round(f.layout)} ms` : ''}`;
+      }),
     sampleSize: stats.frames.length,
     glRenderer,
     errors,
@@ -404,6 +435,11 @@ function row(label, value, verdict, budget) {
     ? '  RESULT: PASS — all measured budgets met'
     : `  RESULT: ${failures} FAILING CHECK${failures > 1 ? 'S' : ''} — see above`);
   console.log('  ' + '─'.repeat(74));
+
+  if (m.longTaskCauses.length) {
+    console.log('\n  Long tasks after first paint:');
+    m.longTaskCauses.forEach((c) => console.log('    - ' + c));
+  }
 
   if (m.errors.length) {
     console.log('\n  JS errors:');
