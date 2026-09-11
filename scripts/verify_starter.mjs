@@ -28,7 +28,19 @@ import puppeteer from 'puppeteer';
 const URL_BASE = 'http://localhost:8000';
 
 async function run(label, { url, reducedMotion = false, startHidden = false }) {
-  const browser = await puppeteer.launch({ headless: 'new', args: ['--enable-unsafe-swiftshader'] });
+    // CI runners have no GPU and no user namespace for Chrome's sandbox, so WebGL has to
+  // come from SwiftShader and the sandbox has to be off or the browser dies at launch.
+  const browser = await puppeteer.launch({
+    headless: 'new',
+    args: [
+      '--no-sandbox',
+      '--disable-setuid-sandbox',
+      '--disable-dev-shm-usage',
+      '--enable-unsafe-swiftshader',
+      '--use-gl=angle',
+      '--use-angle=swiftshader',
+    ],
+  });
   const page = await browser.newPage();
   await page.setViewport({ width: 1440, height: 900 });
   if (reducedMotion) await page.emulateMediaFeatures([{ name: 'prefers-reduced-motion', value: 'reduce' }]);
