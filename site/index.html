@@ -178,7 +178,8 @@ img { max-width: 100%; }
 .hud .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--muted); }
 .hud[data-mode="scene"] .dot { background: var(--accent); box-shadow: 0 0 10px var(--accent); }
 .hud .sep { width: 1px; height: 10px; background: var(--line-2); }
-@media (max-width: 640px) { .hud { left: 16px; right: 16px; justify-content: space-between; gap: 8px; font-size: 9.5px; } .hud .x { display: none; } }
+/* Phones: a compact pill — mode, draw calls, weight — so it never covers a line of copy. */
+@media (max-width: 640px) { .hud { right: 12px; bottom: 12px; gap: 8px; padding: 8px 12px; font-size: 9.5px; } .hud .x, .hud .t { display: none; } }
 
 /* ------------------------------------------------------------------ layout */
 main { position: relative; z-index: 2; }
@@ -413,7 +414,7 @@ html:not([data-motion="off"]) { scroll-behavior: smooth; }
 
 <div class="hud" aria-hidden="true" data-mode="static">
   <span class="dot"></span><b data-h="mode">Static</b>
-  <span class="sep"></span><span data-h="tier">—</span>
+  <span class="sep t"></span><span class="t" data-h="tier">—</span>
   <span class="sep x"></span><span class="x"><b data-h="fps">—</b> fps</span>
   <span class="sep"></span><span><b data-h="calls">0</b> draws</span>
   <span class="sep"></span><span><b data-h="kb">—</b></span>

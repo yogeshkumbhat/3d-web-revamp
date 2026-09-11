@@ -115,7 +115,7 @@ export const STATIONS = {
   }),
 
   toolkit: s({
-    cam: [7.2, 2.6, 7.6], aim: [0, 1.1, 0], shift: 2.9, yaw: 0.5,
+    cam: [7.2, 2.6, 7.6], aim: [0, 1.1, 0], shift: 2.15, yaw: 0.5,
     glow: [0.75, 0.75, 0.75, 0.75, 0.75],
     poster: 'ship',
   }),

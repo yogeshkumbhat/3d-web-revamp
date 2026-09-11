@@ -248,8 +248,16 @@ const raw = (() => {
 const PEAR_BYTES = 24.8 * 1024 * 1024;
 const perf = { lcp: null, lcpEl: null };
 
+// LCP is the largest paint *before the visitor interacts* — browsers stop reporting it
+// at the first input. Stop here too, including on scroll, or content revealed further
+// down the page gets reported as the "LCP" seconds after load.
+let lcpFinal = false;
+for (const type of ['scroll', 'keydown', 'pointerdown']) {
+  addEventListener(type, () => { lcpFinal = true; }, { once: true, passive: true, capture: true });
+}
 try {
   new PerformanceObserver((list) => {
+    if (lcpFinal) return;
     const e = list.getEntries().at(-1);
     perf.lcp = e.startTime;
     const el = e.element;
