@@ -253,10 +253,12 @@ export async function init(container, tier, { pose = null } = {}) {
     if (pose || !firstFrameDone) {
       current = target;
     } else {
-      // Time-based damping, with the per-frame step clamped so a flick to the bottom of
-      // the page glides instead of cutting.
+      // Time-based damping, with the speed capped so a flick to the bottom of the page
+      // glides instead of cutting. The cap is per second, not per frame: per frame, a
+      // device rendering at 10fps would take six times as long to arrive.
       const step = (target - current) * (1 - Math.exp(-delta * 3.2));
-      current += THREE.MathUtils.clamp(step, -0.09, 0.09);
+      const maxStep = 5.4 * delta;          // stations per second
+      current += THREE.MathUtils.clamp(step, -maxStep, maxStep);
     }
 
     const p = pose ? still : pointer.update(elapsed);
