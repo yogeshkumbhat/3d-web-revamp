@@ -17,7 +17,40 @@ import * as THREE from 'three';
  *
  * Use a real HDRI when you need a specific studio look; use this as the default.
  */
-export function createStudioEnvironment(renderer, {
+export function createStudioEnvironment(renderer, options = {}) {
+  return bakeStudio(renderer, buildStudioScene(options));
+}
+
+/**
+ * The same environment, without the synchronous shader compile.
+ *
+ * The bake compiles the backdrop's programs the moment it first renders them, on the
+ * main thread, inside one task — on a throttled phone that task alone sits around the
+ * 50ms long-task budget. This compiles them first with compileAsync, which lets the
+ * driver work in parallel (KHR_parallel_shader_compile) while the page stays responsive,
+ * so the bake that follows only renders. Prefer it whenever init can be async.
+ */
+export async function createStudioEnvironmentAsync(renderer, options = {}) {
+  const scene = buildStudioScene(options);
+
+  // Compile for the state the bake renders in — into a render target, untonemapped —
+  // or the programs won't match and the bake compiles its own anyway.
+  const target = new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType });
+  const camera = new THREE.PerspectiveCamera(90, 1, 0.1, 100);
+  const previousTarget = renderer.getRenderTarget();
+  const previousToneMapping = renderer.toneMapping;
+  renderer.setRenderTarget(target);
+  renderer.toneMapping = THREE.NoToneMapping;
+  const compiled = renderer.compileAsync(scene, camera);   // issues the compile synchronously
+  renderer.setRenderTarget(previousTarget);
+  renderer.toneMapping = previousToneMapping;
+  await compiled;
+  target.dispose();
+
+  return bakeStudio(renderer, scene);
+}
+
+function buildStudioScene({
   top = '#2a2d34',
   bottom = '#08090b',
   keyColor = '#ffffff',
@@ -67,15 +100,22 @@ export function createStudioEnvironment(renderer, {
 
   scene.add(softbox(keyColor, keyIntensity, [-6, 8, 6], [12, 12]));
   scene.add(softbox(fillColor, fillIntensity, [8, 2, -4], [10, 8]));
+  return scene;
+}
 
+function bakeStudio(renderer, scene) {
+  // No compileEquirectangularShader() here: fromScene() never uses that shader, and
+  // compiling it anyway adds a synchronous compile to a task that already sits close
+  // to the 50ms long-task budget.
   const pmrem = new THREE.PMREMGenerator(renderer);
-  pmrem.compileEquirectangularShader();
   const target = pmrem.fromScene(scene, 0.04);
-
-  // The source scene has served its purpose; free it.
-  gradient.geometry.dispose();
-  gradient.material.dispose();
   pmrem.dispose();
+
+  // The source scene has served its purpose; free all of it, softboxes included.
+  scene.traverse((obj) => {
+    obj.geometry?.dispose();
+    obj.material?.dispose();
+  });
 
   return target.texture;
 }

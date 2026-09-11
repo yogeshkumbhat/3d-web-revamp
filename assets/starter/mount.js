@@ -60,7 +60,12 @@ export function mountWhenWorthwhile({ container, load, onSkip = () => {}, rootMa
   const start = async () => {
     if (instance || disposed) return;
     try {
-      instance = await load(tier);
+      const loaded = await load(tier);
+      // destroy() can run while the scene is still downloading — a visitor toggling
+      // motion off, or an SPA route change. Without this check the late instance is
+      // kept, and renders forever behind a page that thinks it was torn down.
+      if (disposed) { loaded?.destroy?.(); return; }
+      instance = loaded;
     } catch (err) {
       console.warn('[3d] scene failed to load, staying on the static path', err);
       onSkip('load-error');

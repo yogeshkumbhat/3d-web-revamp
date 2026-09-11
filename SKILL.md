@@ -155,7 +155,10 @@ can gate a deploy.
 
 Where it cannot measure something reliably it says "not measurable" rather than
 inventing a verdict — headless browsers throttle rendering, so frame timing from CI
-catches regressions but is not a substitute for a real device.
+catches regressions but is not a substitute for a real device. Headless Chrome also
+renders WebGL in software unless told otherwise, which turns GPU work into main-thread
+long tasks; the report names the renderer, and `--gpu` measures against this machine's
+GPU instead.
 
 Report results as a pass/fail list with the measured numbers. If something fails, fix it
 or tell the user what you traded away and why. Never report a checklist as passed on the
@@ -207,7 +210,8 @@ you conversions" is more useful than a compliant build.
   end to end when the user has not supplied one yet
 - `scripts/audit_site.py <url>` — content, meta, palette and font inventory of a live site
 - `scripts/optimize_assets.sh <input.glb>` — compression pipeline with budget reporting
-- `scripts/check_budget.js <url>` — measures performance and fallback paths, exits non-zero on failure
+- `scripts/check_budget.js <url>` — measures performance and fallback paths, exits non-zero on
+  failure; `--gpu` to measure with real hardware instead of software GL
 - `scripts/capture_poster.js <url>` — renders the poster from the live scene in AVIF/WebP/JPEG
 - `scripts/optimize_video.sh <clip>` — video hero encode ladder: h264 + vp9 + poster +
   reduced-motion still, budget-checked, exits non-zero on failure

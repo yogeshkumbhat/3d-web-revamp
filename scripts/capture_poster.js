@@ -58,7 +58,11 @@ try {
 
   const browser = await puppeteer.launch({
     headless: 'new',
-    args: ['--no-sandbox', '--enable-unsafe-swiftshader', '--hide-scrollbars'],
+    // CI runners have no GPU and no user namespace for Chrome's sandbox, so WebGL has to
+    // come from SwiftShader and the sandbox has to be off (same as verify_starter.mjs).
+    args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage',
+           '--enable-unsafe-swiftshader', '--use-gl=angle', '--use-angle=swiftshader',
+           '--hide-scrollbars'],
   });
 
   const page = await browser.newPage();
@@ -102,6 +106,19 @@ try {
   }, selector);
 
   await new Promise((r) => setTimeout(r, 400));
+
+  // A scene that never mounted still screenshots fine — as a black rectangle, which
+  // would then ship as the poster. Refuse instead of writing it.
+  const rendered = await page.evaluate((sel) => {
+    const c = document.querySelector(sel)?.querySelector('canvas');
+    return !!c && c.width > 0 && parseFloat(getComputedStyle(c).opacity) > 0.5
+      && getComputedStyle(c).display !== 'none';
+  }, selector);
+  if (!rendered) {
+    console.error(`No rendered canvas inside ${selector} — the scene never mounted, so the poster would be blank.`);
+    await browser.close();
+    process.exit(1);
+  }
 
   const element = await page.$(selector);
   if (!element) {

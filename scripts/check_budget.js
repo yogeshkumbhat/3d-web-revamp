@@ -16,6 +16,12 @@
  *   node check_budget.js http://localhost:5173
  *   node check_budget.js https://example.com --category configurator --duration 30
  *   node check_budget.js http://localhost:5173 --mobile --json report.json
+ *   node check_budget.js http://localhost:5173 --mobile --gpu     # use this machine's GPU
+ *
+ * Headless Chrome renders WebGL in software (SwiftShader) unless told otherwise, which
+ * makes GPU work show up as main-thread long tasks a real phone would never have. The
+ * report names the renderer it measured with; pass --gpu on a machine with a GPU to
+ * measure against real hardware (CPU throttling still applies with --mobile).
  *
  * Requires: npm i puppeteer
  *
@@ -99,7 +105,7 @@ const INSTRUMENT = `
 
   try {
     new PerformanceObserver((list) => {
-      for (const e of list.getEntries()) stats.longTasks.push(e.duration);
+      for (const e of list.getEntries()) stats.longTasks.push({ start: e.startTime, duration: e.duration });
     }).observe({ type: 'longtask', buffered: true });
   } catch {}
 
@@ -194,6 +200,10 @@ async function measureMain(browser, url, opts) {
       frames: s.frames.slice(skip),
       calls: s.calls.slice(skip),
       tris: s.tris.slice(skip),
+      // The budget is "no task over 50ms after first paint". Parsing and first layout
+      // happen before it and are what LCP already measures; counting them here would
+      // fail every page on the cost of existing at all.
+      fcp: performance.getEntriesByName('first-contentful-paint')[0]?.startTime ?? 0,
       longTasks: s.longTasks,
       lcp: s.lcp ?? null,
       lcpElement: s.lcpElement ?? null,
@@ -205,6 +215,15 @@ async function measureMain(browser, url, opts) {
   const half = Math.floor(stats.frames.length / 2);
   const firstHalf = mean(stats.frames.slice(0, half));
   const secondHalf = mean(stats.frames.slice(half));
+
+  // Which GL the numbers came from. A software renderer puts GPU work on the CPU.
+  const glRenderer = await page.evaluate(() => {
+    try {
+      const gl = document.createElement('canvas').getContext('webgl2');
+      const ext = gl.getExtension('WEBGL_debug_renderer_info');
+      return String(gl.getParameter(ext ? ext.UNMASKED_RENDERER_WEBGL : gl.RENDERER));
+    } catch { return 'unavailable'; }
+  }).catch(() => 'unavailable');
 
   await page.close();
 
@@ -220,8 +239,11 @@ async function measureMain(browser, url, opts) {
     drift: firstHalf > 0 ? (secondHalf - firstHalf) / firstHalf : 0,
     drawCalls: Math.round(p95(stats.calls)),
     triangles: Math.round(p95(stats.tris)),
-    longTasks: stats.longTasks.filter((d) => d > COMMON.longTaskMs),
+    longTasks: stats.longTasks
+      .filter((t) => t.start >= stats.fcp && t.duration > COMMON.longTaskMs)
+      .map((t) => Math.round(t.duration)),
     sampleSize: stats.frames.length,
+    glRenderer,
     errors,
   };
 }
@@ -278,7 +300,7 @@ function row(label, value, verdict, budget) {
   const url = args.find((a) => a.startsWith('http'));
   if (!url) {
     console.error('Usage: node check_budget.js <url> [--category hero|configurator|narrative] ' +
-                  '[--mobile] [--duration 20] [--json out.json]');
+                  '[--mobile] [--gpu] [--duration 20] [--json out.json]');
     process.exit(1);
   }
 
@@ -295,9 +317,12 @@ function row(label, value, verdict, budget) {
   const jsonPath = flag('--json');
   const budget = BUDGETS[category] ?? BUDGETS.hero;
 
+  const gpu = args.includes('--gpu');
   const browser = await puppeteer.launch({
     headless: 'new',
-    args: ['--no-sandbox', '--enable-unsafe-swiftshader'],
+    args: gpu
+      ? ['--no-sandbox', '--enable-gpu', '--ignore-gpu-blocklist', '--use-angle=' + (process.platform === 'darwin' ? 'metal' : 'default')]
+      : ['--no-sandbox', '--enable-unsafe-swiftshader'],
   });
 
   console.log(`\nMeasuring ${url}`);
@@ -329,6 +354,8 @@ function row(label, value, verdict, budget) {
     ['Transfer size', `${m.transferMB.toFixed(2)} MB`, m.transferMB <= budget.payloadMB,
       `<= ${budget.payloadMB} MB`],
     ['Requests', m.requests, null, ''],
+    ['GL renderer', /swiftshader|llvmpipe|software/i.test(m.glRenderer) ? 'software (SwiftShader)' : m.glRenderer.replace(/^ANGLE \(|\)$/g, '').slice(0, 34), null,
+      /swiftshader|llvmpipe|software/i.test(m.glRenderer) ? 'GPU cost lands on the CPU; try --gpu' : ''],
     ['Frame samples', m.sampleSize, m.sampleSize >= 120 ? true : null,
       m.sampleSize < 120 ? 'too few to trust' : '>= 120'],
     ['Frame time p95', enoughFrames ? `${m.frameP95.toFixed(1)} ms` : 'not measurable',
@@ -343,7 +370,7 @@ function row(label, value, verdict, budget) {
     ['Triangles p95', m.triangles ? m.triangles.toLocaleString() : 'not measurable',
       m.triangles > 0 ? m.triangles <= budget.triangles : null,
       `<= ${budget.triangles.toLocaleString()}`],
-    ['Long tasks > 50ms', m.longTasks.length, m.longTasks.length === 0, 'none'],
+    ['Long tasks > 50ms', m.longTasks.length ? `${m.longTasks.length} (${m.longTasks.join(', ')} ms)` : 0, m.longTasks.length === 0, 'none after first paint'],
     ['JS errors', m.errors.length, m.errors.length === 0, 'none'],
   ];
 

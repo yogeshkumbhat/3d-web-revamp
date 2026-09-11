@@ -40,7 +40,7 @@ override reduced motion — that's a stated accessibility need, not a capability
 | `quality.js` | Tier definitions, capability detection, and a live frame-time probe that steps the tier down when the initial guess was optimistic |
 | `mount.js` | The single gate deciding whether the 3D layer loads at all — WebGL, reduced motion, tier, viewport proximity, tab visibility |
 | `lifecycle.js` | Context-loss handling and deep resource disposal, plus a leak reporter |
-| `materials.js` | Procedural studio environment, three-point rig, fresnel rim, film grain, contact shadow, damped pointer tracking |
+| `materials.js` | Procedural studio environment (plus an async variant that keeps its shader compile off the main thread), three-point rig, fresnel rim, film grain, contact shadow, damped pointer tracking |
 | `poster.js` | Crossfade from poster to canvas, and back again on context loss |
 | `scene-vanilla.js` | Complete hero scene wiring all of the above, vanilla Three.js |
 | `Hero.jsx` | The same patterns for React Three Fiber |
